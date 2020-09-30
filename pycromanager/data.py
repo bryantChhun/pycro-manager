@@ -83,6 +83,9 @@ class _MultipageTiffReader:
         index_map_offset_header, index_map_offset = np.frombuffer(self.mmap_file[8:16], dtype=np.uint32)
         if index_map_offset_header != self.INDEX_MAP_OFFSET_HEADER:
             raise Exception('Index map offset header wrong')
+        # int.from_bytes(self.mmap_file[24:28], sys.byteorder) # should be equal to 483729 starting in version 1
+        self._major_version = int.from_bytes(self.mmap_file[28:32], sys.byteorder)
+
         summary_md_header, summary_md_length = np.frombuffer(self.mmap_file[32:40], dtype=np.uint32)
         if summary_md_header != self.SUMMARY_MD_HEADER:
             raise Exception('Index map offset header wrong')
@@ -268,6 +271,8 @@ class Dataset:
 
 
     def __init__(self, dataset_path=None, full_res_only=True, remote_storage=None):
+        self._tile_width = None
+        self._tile_height = None
         if remote_storage is not None:
             #this dataset is a view of an active acquisiiton. The storage exists on the java side
             self._remote_storage = remote_storage
@@ -582,9 +587,10 @@ class Dataset:
             if resolution_level == 0:
                 image = np.reshape(tagged_image.pix,
                                     newshape=[tagged_image.tags['Height'], tagged_image.tags['Width']])
-                #crop down to just the part that shows (i.e. no overlap)
-                image = image[(image.shape[0] - self._tile_height) // 2: -(image.shape[0] - self._tile_height) // 2,
-                            (image.shape[0] - self._tile_width) // 2: -(image.shape[0] - self._tile_width) // 2]
+                if (self._tile_height is not None) and (self._tile_width is not None):
+                    #crop down to just the part that shows (i.e. no overlap)
+                    image = image[(image.shape[0] - self._tile_height) // 2: -(image.shape[0] - self._tile_height) // 2,
+                                (image.shape[1] - self._tile_width) // 2: -(image.shape[1] - self._tile_width) // 2]
             else:
                 image = np.reshape(tagged_image.pix, newshape=[self._tile_height, self._tile_width])
             if read_metadata:
